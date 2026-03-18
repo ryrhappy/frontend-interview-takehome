@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 
 const COLUMN_WIDTH_PX = 48
 const VISIBLE_COLUMNS = 14
+const TOTAL_DAYS = 30
 
 interface VisibleRange {
   startIndex: number
@@ -18,7 +19,7 @@ export function useVisibleRange() {
 
   const visibleRange: VisibleRange = {
     startIndex: Math.floor(scrollLeft / COLUMN_WIDTH_PX),
-    endIndex: Math.floor(scrollLeft / COLUMN_WIDTH_PX) + VISIBLE_COLUMNS,
+    endIndex: Math.min(Math.floor(scrollLeft / COLUMN_WIDTH_PX) + VISIBLE_COLUMNS, TOTAL_DAYS - 1),
     offsetPx: scrollLeft % COLUMN_WIDTH_PX,
   }
 
