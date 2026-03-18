@@ -13,7 +13,7 @@
 ### 性能问题 1 — hover 时全部 30 行同时重渲染
 **文件**：`context/AppContext.tsx`、`components/BookingGrid/RoomRow.tsx`
 
-`AppProvider` 每次渲染时 `value` 都是新建的对象，引用必然变化，导致所有订阅 `AppContext` 的组件（30 个 `RoomRow` + `Sidebar`）无论数据是否真的改变都会重渲染。加之 `RoomRow` 没有 `React.memo`，父组件任何渲染都会带动所有行重渲染。`console.log("render", rowId)` 正是用来暴露这个问题的——鼠标移过任意一格，控制台会打印 30 条日志。
+`AppProvider` 每次渲染时 `value` 都是新建的对象，引用必然变化，导致所有订阅 `AppContext` 的组件（30 个 `RoomRow` + `Sidebar`）无论数据是否真的改变都会重渲染。加之 `RoomRow` 没有 `React.memo`，父组件任何渲染都会带动所有行重渲染。
 
 ### 性能问题 2 — 每次滚动都重复过滤全量预订数据
 **文件**：`components/BookingGrid/BookingGrid.tsx`
@@ -62,7 +62,7 @@
 
 ## 权衡取舍
 
-**保留了 `console.log("render", rowId)`**：该日志是项目有意放置的性能观测点，修复前后对比效果（30 条 → 1 条）可直接在控制台验证，删除会让优化效果无法直观确认。
+
 
 **未将 `hoveredCell` 拆分到独立 context**：最彻底的方案是将 `hoveredCell` 单独拆为 `HoverContext`，`RoomRow` 只订阅 hover，完全隔离其他状态变化。但这需要重构所有相关组件的引用，改动量较大。当前 `useMemo` + `React.memo` 组合已能显著降低无效渲染，选择更保守的方案。
 
@@ -72,4 +72,4 @@
 
 - **彻底拆分 `hoveredCell` context**：独立为 `HoverContext`，`RoomRow` 按行订阅，实现真正的按需渲染，而不是依赖 memo 的浅比较拦截。
 - **行级虚拟滚动**：当前 30 行全量渲染在 DOM 中，若房间数量增长到数百间，需引入虚拟列表（如 `react-window`）只渲染视口内的行。
-- **服务端渲染水合风险**：`defaultConfig.dateRangeStart` 在模块加载时用 `new Date()` 计算，服务端与客户端若有时区差异会触发 hydration mismatch，可改为在 `useEffect` 中初始化。
+- **服务端渲染风险**：`defaultConfig.dateRangeStart` 在模块加载时用 `new Date()` 计算，服务端与客户端若有时区差异会触发 hydration mismatch，可改为在 `useEffect` 中初始化。
