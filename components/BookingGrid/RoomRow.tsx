@@ -35,6 +35,10 @@ export function RoomRow({
 
   const { hoveredCell, setHoveredCell, config } = useAppContext();
 
+  const getBookingStatus = (status: BookingStatus): string => {
+    return STATUS_COLORS[status] ?? "#ccc";
+  };
+
   const visibleBookings = useMemo(() => {
     return bookings
       .filter((b) => {
@@ -65,10 +69,6 @@ export function RoomRow({
         return { booking: b, startDay, endDay, color };
       });
   }, [bookings, visibleStartIndex, visibleEndIndex, config.dateRangeStart]);
-
-  const getBookingStatus = (status: BookingStatus): string => {
-    return STATUS_COLORS[status] ?? "#ccc";
-  };
 
   const isHovered = hoveredCell?.rowId === rowId;
 
