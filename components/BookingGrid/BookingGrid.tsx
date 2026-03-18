@@ -25,8 +25,6 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
   const { visibleRange, handleScroll } = useVisibleRange()
   const { config } = useAppContext()
 
-  // 在 BookingGrid 中管理 hover 状态，而不是通过 Context
-  // 这样只有被 hover 的行会收到更新的 props
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null)
   const [hoveredDayIndex, setHoveredDayIndex] = useState<number | null>(null)
 
@@ -35,21 +33,23 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
     setHoveredDayIndex(dayIndex)
   }, [])
 
-  // 统一使用 context 中的日期基准，与 RoomRow 保持一致，避免错位
-  const startDate = config.dateRangeStart
+  // 计算所有预订中最早的日期作为日期范围的起点
+  const actualStartDate = useMemo(() => {
+    if (bookings.length === 0) return config.dateRangeStart
+    const earliestDate = bookings.reduce((earliest, booking) => {
+      return booking.checkIn < earliest ? booking.checkIn : earliest
+    }, bookings[0].checkIn)
+    return earliestDate
+  }, [bookings, config.dateRangeStart])
 
-  // 日期标签只在 startDate 变化时重新计算，避免每次渲染都生成 30 个字符串
+  const startDate = actualStartDate
   const dayLabels = useMemo(() => getDayLabels(startDate, TOTAL_DAYS), [startDate])
 
-  // 将全量 bookings 按 roomId 预先分组，避免每个房间单独 filter 遍历全量数据
-  // 重要：为所有房间预先初始化空数组，确保没有预订的房间也能获得稳定的引用
   const bookingsByRoom = useMemo(() => {
     const map = new Map<string, Booking[]>()
-    // 先为所有房间初始化空数组
     for (const room of roomUnits) {
       map.set(room.id, [])
     }
-    // 再添加预订数据
     for (const b of bookings) {
       const list = map.get(b.roomUnit.roomId)
       if (list) {
@@ -61,53 +61,72 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Header row */}
-      <div style={{ display: 'flex', borderBottom: '2px solid #ddd', background: '#fafafa' }}>
-        <div style={{ width: 140, minWidth: 140, padding: '8px 12px', fontWeight: 600, fontSize: 13, borderRight: '1px solid #eee', background: config.bookingHeaderBackground }}>
-          Room
-        </div>
-        <div
-          style={{
-            flex: 1,
-            overflow: 'hidden',
-            display: 'flex',
-            background: config.bookingHeaderBackground
-          }}
-        >
-          {Array.from({ length: visibleRange.endIndex - visibleRange.startIndex + 1 }, (_, i) => {
-            const dayIndex = visibleRange.startIndex + i
-            if (dayIndex >= TOTAL_DAYS) return null
-            return (
-              <div
-                key={dayIndex}
-                style={{
-                  width: COLUMN_WIDTH_PX,
-                  minWidth: COLUMN_WIDTH_PX,
-                  padding: '8px 4px',
-                  fontSize: 11,
-                  textAlign: 'center',
-                  borderRight: '1px solid #eee',
-                  color: '#666',
-                }}
-              >
-                {dayLabels[dayIndex]}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Scrollable grid body */}
+      {/* Scrollable container - contains both header and body */}
       <div
-        style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          position: 'relative'
+        }}
         onScroll={handleScroll}
       >
         <div style={{ minWidth: TOTAL_DAYS * COLUMN_WIDTH_PX + 140 }}>
+          {/* Header row */}
+          <div
+            style={{
+              position: 'sticky',
+              top: 0,
+              display: 'flex',
+              borderBottom: '2px solid #ddd',
+              background: '#fafafa',
+              zIndex: 30,
+            }}
+          >
+            {/* Room column header */}
+            <div style={{
+              position: 'sticky',
+              left: 0,
+              width: 140,
+              minWidth: 140,
+              padding: '8px 12px',
+              fontWeight: 600,
+              fontSize: 13,
+              borderRight: '1px solid #eee',
+              background: config.bookingHeaderBackground,
+              zIndex: 40,
+            }}>
+              Room
+            </div>
+
+            {/* Date headers - use absolute positioning like RoomRow */}
+            <div style={{ position: 'relative', flex: 1, height: 38, marginLeft: -140 }}>
+              {Array.from({ length: TOTAL_DAYS }, (_, i) => {
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      position: 'absolute',
+                      left: 140 + i * COLUMN_WIDTH_PX,  // 加上房间列宽度
+                      width: COLUMN_WIDTH_PX,
+                      height: 38,
+                      padding: '8px 4px',
+                      fontSize: 11,
+                      textAlign: 'center',
+                      borderRight: '1px solid #eee',
+                      color: '#666',
+                    }}
+                  >
+                    {dayLabels[i]}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Body rows */}
           {roomUnits.map(room => {
             const roomBookings = bookingsByRoom.get(room.id)!
             const isHovered = hoveredRowId === room.id
-            // 只给被 hover 的行传递 hoveredDayIndex，其他行传 null
-            // 这样 React.memo 的浅比较会发现其他行的 props 没有变化
             return (
               <RoomRow
                 key={room.id}
@@ -121,6 +140,7 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
                 isHovered={isHovered}
                 hoveredDayIndex={isHovered ? hoveredDayIndex : null}
                 onCellHover={handleCellHover}
+                dateRangeStart={startDate}
               />
             )
           })}
