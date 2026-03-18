@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState, useCallback } from 'react'
 import { Booking, RoomUnit } from '@/types'
 import { useVisibleRange } from '@/hooks/useVisibleRange'
 import { RoomRow } from './RoomRow'
@@ -25,6 +25,16 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
   const { visibleRange, handleScroll } = useVisibleRange()
   const { config } = useAppContext()
 
+  // 在 BookingGrid 中管理 hover 状态，而不是通过 Context
+  // 这样只有被 hover 的行会收到更新的 props
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null)
+  const [hoveredDayIndex, setHoveredDayIndex] = useState<number | null>(null)
+
+  const handleCellHover = useCallback((rowId: string | null, dayIndex: number | null) => {
+    setHoveredRowId(rowId)
+    setHoveredDayIndex(dayIndex)
+  }, [])
+
   // 统一使用 context 中的日期基准，与 RoomRow 保持一致，避免错位
   const startDate = config.dateRangeStart
 
@@ -32,15 +42,22 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
   const dayLabels = useMemo(() => getDayLabels(startDate, TOTAL_DAYS), [startDate])
 
   // 将全量 bookings 按 roomId 预先分组，避免每个房间单独 filter 遍历全量数据
+  // 重要：为所有房间预先初始化空数组，确保没有预订的房间也能获得稳定的引用
   const bookingsByRoom = useMemo(() => {
     const map = new Map<string, Booking[]>()
+    // 先为所有房间初始化空数组
+    for (const room of roomUnits) {
+      map.set(room.id, [])
+    }
+    // 再添加预订数据
     for (const b of bookings) {
-      const list = map.get(b.roomUnit.roomId) ?? []
-      list.push(b)
-      map.set(b.roomUnit.roomId, list)
+      const list = map.get(b.roomUnit.roomId)
+      if (list) {
+        list.push(b)
+      }
     }
     return map
-  }, [bookings])
+  }, [bookings, roomUnits])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -87,7 +104,10 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
       >
         <div style={{ minWidth: TOTAL_DAYS * COLUMN_WIDTH_PX + 140 }}>
           {roomUnits.map(room => {
-            const roomBookings = bookingsByRoom.get(room.id) ?? []
+            const roomBookings = bookingsByRoom.get(room.id)!
+            const isHovered = hoveredRowId === room.id
+            // 只给被 hover 的行传递 hoveredDayIndex，其他行传 null
+            // 这样 React.memo 的浅比较会发现其他行的 props 没有变化
             return (
               <RoomRow
                 key={room.id}
@@ -98,6 +118,9 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
                 visibleEndIndex={visibleRange.endIndex}
                 totalDays={TOTAL_DAYS}
                 onBookingClick={onBookingClick}
+                isHovered={isHovered}
+                hoveredDayIndex={isHovered ? hoveredDayIndex : null}
+                onCellHover={handleCellHover}
               />
             )
           })}

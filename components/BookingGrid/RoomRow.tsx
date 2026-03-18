@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useCallback } from "react";
 import { Booking, BookingStatus } from "@/types";
 import { useAppContext } from "@/context/AppContext";
 
@@ -12,6 +12,9 @@ interface RoomRowProps {
   visibleEndIndex: number;
   totalDays: number;
   onBookingClick: (booking: Booking) => void;
+  isHovered: boolean;  // 当前行是否被 hover
+  hoveredDayIndex: number | null;  // 当前 hover 的天索引
+  onCellHover: (rowId: string | null, dayIndex: number | null) => void;
 }
 
 const STATUS_COLORS: Record<BookingStatus, string> = {
@@ -22,7 +25,7 @@ const STATUS_COLORS: Record<BookingStatus, string> = {
   cancelled: "#F44336",
 };
 
-export function RoomRow({
+function RoomRowComponent({
   rowId,
   rowName,
   bookings,
@@ -30,10 +33,13 @@ export function RoomRow({
   visibleEndIndex,
   totalDays,
   onBookingClick,
+  isHovered,
+  hoveredDayIndex,
+  onCellHover,
 }: RoomRowProps) {
   console.log("render", rowId);
 
-  const { hoveredCell, setHoveredCell, config } = useAppContext();
+  const { config } = useAppContext();
 
   const getBookingStatus = (status: BookingStatus): string => {
     return STATUS_COLORS[status] ?? "#ccc";
@@ -70,8 +76,6 @@ export function RoomRow({
       });
   }, [bookings, visibleStartIndex, visibleEndIndex, config.dateRangeStart]);
 
-  const isHovered = hoveredCell?.rowId === rowId;
-
   return (
     <div
       style={{
@@ -102,9 +106,8 @@ export function RoomRow({
           { length: visibleEndIndex - visibleStartIndex + 1 },
           (_, i) => {
             const dayIndex = visibleStartIndex + i;
-            const isCellHovered =
-              hoveredCell?.rowId === rowId &&
-              hoveredCell?.dayIndex === dayIndex;
+            // 只有当前行被 hover 时才检查具体哪个单元格
+            const isCellHovered = isHovered && hoveredDayIndex === dayIndex;
             return (
               <div
                 key={dayIndex}
@@ -117,8 +120,8 @@ export function RoomRow({
                   borderRight: "1px solid #f0f0f0",
                   cursor: "default",
                 }}
-                onMouseEnter={() => setHoveredCell({ rowId, dayIndex })}
-                onMouseLeave={() => setHoveredCell(null)}
+                onMouseEnter={() => onCellHover(rowId, dayIndex)}
+                onMouseLeave={() => onCellHover(null, null)}
               />
             );
           },
@@ -167,3 +170,7 @@ export function RoomRow({
     </div>
   );
 }
+
+// 使用 React.memo 包裹，只有 props 变化时才重新渲染
+// 由于 hover 状态通过 props 传递，只有被 hover 的行会重新渲染
+export const RoomRow = React.memo(RoomRowComponent);

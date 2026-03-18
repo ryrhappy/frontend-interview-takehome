@@ -6,6 +6,7 @@ import React, {
   ReactNode,
 } from 'react'
 import { useRouter } from 'next/router'
+import type { Ticket } from '@/types'
 
 interface House {
   id: string

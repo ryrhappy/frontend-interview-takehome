@@ -1,15 +1,8 @@
-import React, { createContext, useContext, useMemo, useState, ReactNode } from 'react'
+import React, { createContext, useContext, useMemo, ReactNode } from 'react'
 import { AppConfig } from '@/types'
-
-interface HoveredCell {
-  rowId: string
-  dayIndex: number
-}
 
 interface AppContextValue {
   config: AppConfig
-  hoveredCell: HoveredCell | null
-  setHoveredCell: (cell: HoveredCell | null) => void
 }
 
 const defaultConfig: AppConfig = {
@@ -27,15 +20,11 @@ const defaultConfig: AppConfig = {
 const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [hoveredCell, setHoveredCell] = useState<HoveredCell | null>(null)
-
   const value: AppContextValue = useMemo(
     () => ({
       config: defaultConfig,
-      hoveredCell,
-      setHoveredCell,
     }),
-    [hoveredCell],
+    [],
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
