@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import type { GetServerSideProps, NextPage } from 'next'
 import { useRouter } from 'next/router'
-import useSWR from 'swr'
+import useSWR, { useSWRConfig } from 'swr'
 import { Ticket } from '@/types'
 import { useMessagesContext } from '@/context/MessagesContext'
 
@@ -14,6 +14,7 @@ const fetcher = (url: string) => fetch(url).then(r => r.json())
 const MessagesPage: NextPage<MessagesPageProps> = () => {
   const router = useRouter()
   const { setUnreadCount } = useMessagesContext()
+  const { mutate } = useSWRConfig()
   const { data: tickets } = useSWR<Ticket[]>('/api/tickets', fetcher)
 
   // Sync unread count into context
@@ -27,6 +28,18 @@ const MessagesPage: NextPage<MessagesPageProps> = () => {
   const currentTicketId = router.query.ticketId as string | null
 
   const handleTicketClick = (ticket: Ticket) => {
+    // 如果消息未读，标记为已读（乐观更新）
+    if (ticket.unread) {
+      mutate(
+        '/api/tickets',
+        tickets?.map(t =>
+          t.id === ticket.id ? { ...t, unread: false } : t
+        ) ?? [],
+        false // 不触发重新验证
+      )
+      // 更新未读数量
+      setUnreadCount((tickets?.filter(t => t.unread).length ?? 1) - 1)
+    }
     router.push(`/messages?ticketId=${ticket.id}&houseId=${ticket.houseId}`)
   }
 

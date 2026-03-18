@@ -10,37 +10,36 @@
 ### Bug 2 — 表头日期与预订色块错位
 **文件**：`components/BookingGrid/BookingGrid.tsx`、`components/BookingGrid/RoomRow.tsx`
 
-**问题 1**：表头和预订区域使用不同的日期基准。`BookingGrid` 用 `new Date()` 独立计算表头的 `startDate`，而 `RoomRow` 用的是 `AppContext` 里的 `config.dateRangeStart`，两个 `new Date()` 各自独立执行，在极端情况下会得到不同的日期。
+**问题 1**：日期基准不统一。表头和预订区域使用不同的日期基准，可能导致日期计算不一致。
 
-**问题 2**：横向滚动时错位。表头日期容器和预订区域使用不同的定位基准：
-- 表头日期元素：`left: i * COLUMN_WIDTH_PX`（相对于容器，从 0 开始）
-- 预订色块：`left: startDay * COLUMN_WIDTH_PX`（相对于整个滚动区域）
-- 两者相差房间列宽度（140px），导致横向滚动时错位。
+**问题 2**：横向滚动时错位。表头日期和预订色块使用不同的定位基准，相差房间列宽度（140px），导致滚动时错位。
 
-### 性能问题 1 — hover 时全部 30 行同时重渲染
+### Bug 3 — bookings 引用不稳定导致无效渲染
+**文件**：`components/BookingGrid/BookingGrid.tsx`
+
+**问题 1**：`bookingsByRoom` 每次渲染都重新计算，没有缓存。
+
+**问题 2**：空数组引用不稳定。`map.get(roomId) ?? []` 每次都创建新的空数组引用，导致 `React.memo` 失效。
+
+### Bug 4 — hover 时全部 30 行同时重渲染
 **文件**：`context/AppContext.tsx`、`components/BookingGrid/BookingGrid.tsx`、`components/BookingGrid/RoomRow.tsx`
 
-**根本原因**：React Context 的机制导致当 Context 值变化时，**所有消费该 Context 的组件都会重新渲染**，`React.memo` 无法阻止 Context 变化触发的渲染。
+通过 React Context 管理 hover 状态，当 Context 值变化时，**所有消费该 Context 的组件都会重新渲染**，`React.memo` 无法阻止。
 
-### 性能问题 2 — bookings 引用不稳定导致无效渲染
-**文件**：`components/BookingGrid/BookingGrid.tsx`
-
-当房间没有预订数据时，`map.get(roomId) ?? []` 的回退逻辑每次都创建新的空数组引用，导致这些房间的 `bookings` prop 每次父组件渲染时都变化，`React.memo` 失效。
-
-### 性能问题 3 — 每次滚动都重复过滤全量预订数据
-**文件**：`components/BookingGrid/BookingGrid.tsx`
-
-每次渲染时对 50 条预订数据执行 30 次完整遍历，复杂度 O(rooms × bookings)。`dayLabels` 数组每次渲染也重新生成，没有缓存。
-
-### 性能问题 4 — 可见列索引无上限限制
+### Bug 5 — 可见列索引无上限限制
 **文件**：`hooks/useVisibleRange.ts`
 
 `endIndex` 没有上限限制，滚动到最右侧时可能超出日历范围（30天）。
 
-### 架构问题 — 工单选中状态被三处同时维护
+### Bug 6 — 工单选中状态被三处同时维护
 **文件**：`context/MessagesContext.tsx`、`pages/messages/index.tsx`
 
 当前选中工单的 ID 同时存在于 URL query、`MessagesContext` 的 `activeTicketId`、页面的 `initialTicketId`。状态同步逻辑复杂，难以维护。
+
+### Bug 7 — 点击消息后未读提示不消失
+**文件**：`pages/messages/index.tsx`
+
+点击消息查看时，只更新了 URL query，没有更新消息的 `unread` 字段，导致未读小圆点和字体粗细不变化。未读数量也未同步更新。
 
 ---
 
@@ -51,49 +50,32 @@
 
 将函数定义从 `useMemo` 之后移到之前，确保闭包创建时函数已完成初始化。函数逻辑本身不做任何修改，仅调整声明顺序。
 
-### Fix 2 — 统一日期基准，缓存计算结果，稳定 bookings 引用
-**文件**：`components/BookingGrid/BookingGrid.tsx`
-
-**问题分析**：
-1. 日期基准不统一导致日期计算不一致
-2. `bookingsByRoom` 每次都重新计算，没有缓存
-3. 空数组引用不稳定导致 `React.memo` 失效
-4. 表头和预订区域的定位基准不一致
-
-**解决方案**：
-
-1. **统一日期基准**：使用 `config.dateRangeStart` 作为唯一日期基准，消除两处独立 `new Date()` 导致的不一致风险
-
-2. **缓存日期标签**：对 `dayLabels` 加 `useMemo`，仅 `startDate` 变化时重新计算，避免每次渲染都生成 30 个字符串
-
-3. **稳定 bookings 引用**：将全量 bookings 按 `roomId` 预先分组为 Map，并为所有房间预先初始化空数组。这样：
-   - 每个房间直接 `map.get(roomId)` 取数据，从 O(rooms × bookings) 降到 O(bookings) 一次分组
-   - 没有预订的房间也能获得稳定的空数组引用，避免 props 浅比较失败
-
-4. **动态计算日期范围起点**：计算所有预订中最早的日期作为 `dateRangeStart`，而不是固定使用当天日期。这样所有预订都能完整显示，不会被截断
-
-5. **统一定位基准**：
-   - 表头日期元素：`left: 140 + i * COLUMN_WIDTH_PX`（加上房间列宽度）
-   - 预订色块：`left: 140 + startDay * COLUMN_WIDTH_PX`（加上房间列宽度）
-   - 使用 `marginLeft: -140` 补偿偏移
-
-### Fix 3 — 稳定 AppContext，移除 hover 状态
-**文件**：`context/AppContext.tsx`
-
-将 `hoveredCell` 状态完全移除，不再通过 Context 管理 hover 状态，避免 Context 变化触发所有消费者渲染。`value` 对象用 `useMemo` 包裹，依赖数组为空，确保 `config` 引用永不变化。
-
-### Fix 4 — hover 状态通过 props 传递 + React.memo
+### Fix 2 — 统一日期基准，统一定位基准
 **文件**：`components/BookingGrid/BookingGrid.tsx`、`components/BookingGrid/RoomRow.tsx`
 
-**核心思路**：不在子组件中消费 Context，而是在父组件 `BookingGrid` 中管理 hover 状态，通过 props 传递给子组件。
+1. **统一日期基准**：使用 `config.dateRangeStart` 作为唯一日期基准，消除独立 `new Date()` 导致的不一致风险
 
-**实现细节**：
-1. `BookingGrid` 使用 `useState` 管理 `hoveredRowId` 和 `hoveredDayIndex`
-2. 通过 `isHovered={hoveredRowId === room.id}` 判断当前行是否被 hover
-3. 只给被 hover 的行传递实际的 `hoveredDayIndex`，其他行传 `null`
-4. `RoomRow` 使用 `React.memo` 包裹，配合 props 变化实现真正的按需渲染
+2. **统一定位基准**：表头日期和预订色块都使用 `left: 140 + dayIndex * COLUMN_WIDTH_PX`，并用 `marginLeft: -140` 补偿偏移
 
-**效果**：只有被 hover 的行 props 会变化（`isHovered: false → true`），其他行 props 完全不变（`isHovered: false`，`hoveredDayIndex: null`），`React.memo` 浅比较成功，跳过渲染。
+3. **动态计算日期范围起点**：计算所有预订中最早的日期作为 `dateRangeStart`，确保所有预订完整显示
+
+### Fix 3 — 稳定 bookings 引用，缓存计算结果
+**文件**：`components/BookingGrid/BookingGrid.tsx`
+
+1. **缓存 bookingsByRoom**：用 `useMemo` 包裹，避免每次渲染都重新计算
+
+2. **稳定空数组引用**：预先为所有房间初始化空数组，确保 `map.get(roomId)` 始终返回稳定引用
+
+### Fix 4 — hover 状态通过 props 传递 + React.memo
+**文件**：`context/AppContext.tsx`、`components/BookingGrid/BookingGrid.tsx`、`components/BookingGrid/RoomRow.tsx`
+
+1. **移除 Context 中的 hover 状态**：从 `AppContext` 中移除 `hoveredCell`，用 `useMemo` 包裹 `value` 确保引用永不变化
+
+2. **父组件管理 hover 状态**：`BookingGrid` 使用 `useState` 管理 `hoveredRowId` 和 `hoveredDayIndex`
+
+3. **通过 props 传递**：只给被 hover 的行传递实际的 `hoveredDayIndex`，其他行传 `null`
+
+4. **React.memo 优化**：`RoomRow` 用 `React.memo` 包裹，只有被 hover 的行 props 变化，其他行跳过渲染
 
 ### Fix 5 — 限制 endIndex 上限
 **文件**：`hooks/useVisibleRange.ts`
@@ -104,6 +86,18 @@
 **文件**：`context/MessagesContext.tsx`、`pages/messages/index.tsx`
 
 删除 `MessagesContext` 中的 `activeTicketId` 状态和路由监听 `useEffect`，页面完全以 URL query 为单一数据源获取当前工单 ID。context 只保留真正需要跨页面共享的状态（未读数量、当前 house）。
+
+### Fix 7 — 消息已读状态乐观更新
+**文件**：`pages/messages/index.tsx`
+
+**问题**：点击消息查看时未读状态不更新。
+
+**解决方案**：使用 SWR 的 `mutate` 函数实现乐观更新。当点击未读消息时：
+1. 通过 `mutate` 立即更新本地缓存，将 `unread` 设为 `false`
+2. 同步更新 context 中的 `unreadCount`
+3. UI 立即响应（小圆点消失、字体变细）
+
+传递 `false` 作为第三个参数表示不触发重新验证（因为使用的是 mock 数据）。
 
 ---
 
