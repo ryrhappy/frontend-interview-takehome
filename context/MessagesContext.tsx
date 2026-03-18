@@ -6,7 +6,6 @@ import React, {
   ReactNode,
 } from 'react'
 import { useRouter } from 'next/router'
-import { Ticket } from '@/types'
 
 interface House {
   id: string
@@ -22,8 +21,6 @@ const HOUSES: House[] = [
 interface MessagesContextValue {
   currentHouse: House | null
   setCurrentHouse: (house: House | null) => void
-  activeTicketId: string | null
-  setActiveTicketId: (id: string | null) => void
   unreadCount: number
   setUnreadCount: (n: number) => void
 }
@@ -33,16 +30,10 @@ const MessagesContext = createContext<MessagesContextValue | null>(null)
 export function MessagesProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const [currentHouse, setCurrentHouse] = useState<House | null>(null)
-  const [activeTicketId, setActiveTicketId] = useState<string | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     const houseId = router.query.houseId as string
-    const ticketId = router.query.ticketId as string
-
-    if (ticketId) {
-      setActiveTicketId(ticketId)
-    }
 
     if (houseId) {
       const house = HOUSES.find(h => h.id === houseId)
@@ -57,8 +48,6 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       value={{
         currentHouse,
         setCurrentHouse,
-        activeTicketId,
-        setActiveTicketId,
         unreadCount,
         setUnreadCount,
       }}

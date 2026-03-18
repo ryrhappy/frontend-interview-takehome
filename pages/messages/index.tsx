@@ -6,14 +6,14 @@ import { Ticket } from '@/types'
 import { useMessagesContext } from '@/context/MessagesContext'
 
 interface MessagesPageProps {
-  initialTicketId: string | null
+  // initialTicketId 已移除，完全以 URL query 为数据源
 }
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-const MessagesPage: NextPage<MessagesPageProps> = ({ initialTicketId }) => {
+const MessagesPage: NextPage<MessagesPageProps> = () => {
   const router = useRouter()
-  const { activeTicketId, setActiveTicketId, setUnreadCount } = useMessagesContext()
+  const { setUnreadCount } = useMessagesContext()
   const { data: tickets } = useSWR<Ticket[]>('/api/tickets', fetcher)
 
   // Sync unread count into context
@@ -23,8 +23,8 @@ const MessagesPage: NextPage<MessagesPageProps> = ({ initialTicketId }) => {
     }
   }, [tickets, setUnreadCount])
 
-  // Use ticketId from URL or prop
-  const currentTicketId = (router.query.ticketId as string) ?? initialTicketId ?? activeTicketId
+  // 完全以 URL query 为数据源
+  const currentTicketId = router.query.ticketId as string | null
 
   const handleTicketClick = (ticket: Ticket) => {
     router.push(`/messages?ticketId=${ticket.id}&houseId=${ticket.houseId}`)
@@ -125,12 +125,9 @@ const MessagesPage: NextPage<MessagesPageProps> = ({ initialTicketId }) => {
   )
 }
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
-  const ticketId = (context.query.ticketId as string) ?? null
+export const getServerSideProps: GetServerSideProps = async () => {
   return {
-    props: {
-      initialTicketId: ticketId,
-    },
+    props: {},
   }
 }
 
