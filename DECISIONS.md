@@ -25,7 +25,7 @@
 
 `endIndex = startIndex + VISIBLE_COLUMNS`，固定加 14，没有考虑日历只有 30 天（索引上限 29）。滚动到最右侧时 `endIndex` 会超出范围。`BookingGrid` 表头有 `if (dayIndex >= TOTAL_DAYS) return null` 做防护，但 `RoomRow` 计算预订色块宽度时直接使用传入的 `endIndex`，存在越界隐患。
 
-### 架构问题 — 工单选中状态被三处同时维护（已发现，暂未修复）
+### 架构问题 — 工单选中状态被三处同时维护
 **文件**：`context/MessagesContext.tsx`、`pages/messages/index.tsx`
 
 当前选中工单的 ID 同时存在于：URL query 参数、`MessagesContext` 的 `activeTicketId` state、页面的 `initialTicketId` prop。`MessagesContext` 内部通过 `useEffect` 监听路由变化来同步状态，`setActiveTicketId` 在页面组件中被解构但从未直接调用，实际由 context 内部副作用驱动——逻辑冗余，阅读和调试都有误导性。
@@ -54,6 +54,10 @@
 
 将 `endIndex` 改为 `Math.min(startIndex + VISIBLE_COLUMNS, TOTAL_DAYS - 1)`，从源头保证传递给子组件的索引始终合法，不依赖下游各自防御。
 
+### Fix 6 — 简化 MessagesContext 状态管理（`MessagesContext.tsx`、`pages/messages/index.tsx`）
+
+删除 `MessagesContext` 中的 `activeTicketId` 状态和路由监听 `useEffect`，以及页面组件中对它的依赖。页面完全以 URL query 为单一数据源获取当前工单 ID，消除三处状态同步的复杂逻辑。context 只保留真正需要跨页面共享的状态（未读数量、当前 house）。
+
 ---
 
 ## 权衡取舍
@@ -62,13 +66,10 @@
 
 **未将 `hoveredCell` 拆分到独立 context**：最彻底的方案是将 `hoveredCell` 单独拆为 `HoverContext`，`RoomRow` 只订阅 hover，完全隔离其他状态变化。但这需要重构所有相关组件的引用，改动量较大。当前 `useMemo` + `React.memo` 组合已能显著降低无效渲染，选择更保守的方案。
 
-**未修复 `MessagesContext` 架构问题**：需要重新设计状态策略（以 URL 为唯一数据源，删除 context 内的路由监听），涉及文件和逻辑较多，风险较高，记录在此留作后续。
-
 ---
 
 ## 如果有更多时间
 
 - **彻底拆分 `hoveredCell` context**：独立为 `HoverContext`，`RoomRow` 按行订阅，实现真正的按需渲染，而不是依赖 memo 的浅比较拦截。
-- **重构 `MessagesContext`**：删除 Provider 内的路由监听，`MessagesPage` 完全以 URL query 为单一数据源，context 只保留跨页面共享的状态（如未读数量）。
 - **行级虚拟滚动**：当前 30 行全量渲染在 DOM 中，若房间数量增长到数百间，需引入虚拟列表（如 `react-window`）只渲染视口内的行。
 - **服务端渲染水合风险**：`defaultConfig.dateRangeStart` 在模块加载时用 `new Date()` 计算，服务端与客户端若有时区差异会触发 hydration mismatch，可改为在 `useEffect` 中初始化。
