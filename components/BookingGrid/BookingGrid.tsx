@@ -1,8 +1,8 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Booking, RoomUnit } from '@/types'
 import { useVisibleRange } from '@/hooks/useVisibleRange'
 import { RoomRow } from './RoomRow'
-import {useAppContext} from "@/context/AppContext";
+import { useAppContext } from "@/context/AppContext";
 
 const COLUMN_WIDTH_PX = 48
 const TOTAL_DAYS = 30
@@ -25,8 +25,22 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
   const { visibleRange, handleScroll } = useVisibleRange()
   const { config } = useAppContext()
 
-  const startDate = new Date().toISOString().split('T')[0]
-  const dayLabels = getDayLabels(startDate, TOTAL_DAYS)
+  // 统一使用 context 中的日期基准，与 RoomRow 保持一致，避免错位
+  const startDate = config.dateRangeStart
+
+  // 日期标签只在 startDate 变化时重新计算，避免每次渲染都生成 30 个字符串
+  const dayLabels = useMemo(() => getDayLabels(startDate, TOTAL_DAYS), [startDate])
+
+  // 将全量 bookings 按 roomId 预先分组，避免每个房间单独 filter 遍历全量数据
+  const bookingsByRoom = useMemo(() => {
+    const map = new Map<string, Booking[]>()
+    for (const b of bookings) {
+      const list = map.get(b.roomUnit.roomId) ?? []
+      list.push(b)
+      map.set(b.roomUnit.roomId, list)
+    }
+    return map
+  }, [bookings])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -73,9 +87,7 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
       >
         <div style={{ minWidth: TOTAL_DAYS * COLUMN_WIDTH_PX + 140 }}>
           {roomUnits.map(room => {
-            const roomBookings = bookings.filter(
-              b => b.roomUnit.roomId === room.id
-            )
+            const roomBookings = bookingsByRoom.get(room.id) ?? []
             return (
               <RoomRow
                 key={room.id}
