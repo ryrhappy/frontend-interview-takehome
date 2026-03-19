@@ -1,11 +1,8 @@
 import React, { useMemo, useState, useCallback } from 'react'
 import { Booking, RoomUnit } from '@/types'
-import { useVisibleRange } from '@/hooks/useVisibleRange'
 import { RoomRow } from './RoomRow'
 import { useAppContext } from "@/context/AppContext";
-
-const COLUMN_WIDTH_PX = 48
-const TOTAL_DAYS = 30
+import { COLUMN_WIDTH_PX, TOTAL_DAYS } from '@/lib/constants'
 
 interface BookingGridProps {
   roomUnits: RoomUnit[]
@@ -22,7 +19,6 @@ function getDayLabels(startDate: string, totalDays: number): string[] {
 }
 
 export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGridProps) {
-  const { visibleRange, handleScroll } = useVisibleRange()
   const { config } = useAppContext()
 
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null)
@@ -68,7 +64,6 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
           overflow: 'auto',
           position: 'relative'
         }}
-        onScroll={handleScroll}
       >
         <div style={{ minWidth: TOTAL_DAYS * COLUMN_WIDTH_PX + 140 }}>
           {/* Header row */}
@@ -133,8 +128,6 @@ export function BookingGrid({ roomUnits, bookings, onBookingClick }: BookingGrid
                 rowId={room.id}
                 rowName={room.name}
                 bookings={roomBookings}
-                visibleStartIndex={visibleRange.startIndex}
-                visibleEndIndex={visibleRange.endIndex}
                 totalDays={TOTAL_DAYS}
                 onBookingClick={onBookingClick}
                 isHovered={isHovered}

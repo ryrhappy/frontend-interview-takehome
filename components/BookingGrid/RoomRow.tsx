@@ -1,20 +1,17 @@
 import React, { useMemo } from "react";
 import { Booking, BookingStatus } from "@/types";
-
-const COLUMN_WIDTH_PX = 48;
+import { COLUMN_WIDTH_PX } from "@/lib/constants";
 
 interface RoomRowProps {
   rowId: string;
   rowName: string;
   bookings: Booking[];
-  visibleStartIndex: number;
-  visibleEndIndex: number;
   totalDays: number;
   onBookingClick: (booking: Booking) => void;
   isHovered: boolean;
   hoveredDayIndex: number | null;
   onCellHover: (rowId: string | null, dayIndex: number | null) => void;
-  dateRangeStart: string;  // 从父组件传递的实际日期范围起点
+  dateRangeStart: string;
 }
 
 const STATUS_COLORS: Record<BookingStatus, string> = {
@@ -29,8 +26,6 @@ function RoomRowComponent({
   rowId,
   rowName,
   bookings,
-  visibleStartIndex,
-  visibleEndIndex,
   totalDays,
   onBookingClick,
   isHovered,
@@ -40,41 +35,16 @@ function RoomRowComponent({
 }: RoomRowProps) {
   console.log("render", rowId);
 
-  const getBookingStatus = (status: BookingStatus): string => {
-    return STATUS_COLORS[status] ?? "#ccc";
-  };
-
-  // 计算预订相对于 dateRangeStart 的位置（全局位置，不是相对于可见范围）
-  const visibleBookings = useMemo(() => {
-    return bookings
-      .filter((b) => {
-        const startDay = Math.floor(
-          (new Date(b.checkIn).getTime() -
-            new Date(dateRangeStart).getTime()) /
-            (1000 * 60 * 60 * 24),
-        );
-        const endDay = Math.floor(
-          (new Date(b.checkOut).getTime() -
-            new Date(dateRangeStart).getTime()) /
-            (1000 * 60 * 60 * 24),
-        );
-        return endDay >= visibleStartIndex && startDay <= visibleEndIndex;
-      })
-      .map((b) => {
-        const startDay = Math.floor(
-          (new Date(b.checkIn).getTime() -
-            new Date(dateRangeStart).getTime()) /
-            (1000 * 60 * 60 * 24),
-        );
-        const endDay = Math.floor(
-          (new Date(b.checkOut).getTime() -
-            new Date(dateRangeStart).getTime()) /
-            (1000 * 60 * 60 * 24),
-        );
-        const color = getBookingStatus(b.status);
-        return { booking: b, startDay, endDay, color };
-      });
-  }, [bookings, visibleStartIndex, visibleEndIndex, dateRangeStart]);
+  // 计算所有预订的绝对位置，CSS overflow 负责裁剪可见区域
+  const positionedBookings = useMemo(() => {
+    const baseTime = new Date(dateRangeStart).getTime();
+    const MS_PER_DAY = 1000 * 60 * 60 * 24;
+    return bookings.map((b) => {
+      const startDay = Math.floor((new Date(b.checkIn).getTime() - baseTime) / MS_PER_DAY);
+      const endDay = Math.floor((new Date(b.checkOut).getTime() - baseTime) / MS_PER_DAY);
+      return { booking: b, startDay, endDay, color: STATUS_COLORS[b.status] ?? "#ccc" };
+    });
+  }, [bookings, dateRangeStart]);
 
   return (
     <div
@@ -128,7 +98,7 @@ function RoomRowComponent({
         })}
 
         {/* Booking bars - positioned using global day index */}
-        {visibleBookings.map(({ booking, startDay, endDay, color }) => {
+        {positionedBookings.map(({ booking, startDay, endDay, color }) => {
           const left = 140 + startDay * COLUMN_WIDTH_PX;  // 加上房间列宽度
           const width = (endDay - startDay + 1) * COLUMN_WIDTH_PX;
           return (

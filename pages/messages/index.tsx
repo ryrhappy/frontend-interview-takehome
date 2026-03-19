@@ -9,7 +9,10 @@ interface MessagesPageProps {
   // initialTicketId 已移除，完全以 URL query 为数据源
 }
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const fetcher = (url: string) => fetch(url).then(r => {
+  if (!r.ok) throw new Error(r.statusText)
+  return r.json()
+})
 
 const MessagesPage: NextPage<MessagesPageProps> = () => {
   const router = useRouter()

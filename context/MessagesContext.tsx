@@ -42,7 +42,7 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         setCurrentHouse(house)
       }
     }
-  }, [router.query])
+  }, [router.query.houseId])
 
   return (
     <MessagesContext.Provider

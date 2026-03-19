@@ -6,7 +6,10 @@ import { BookingGrid } from '@/components/BookingGrid/BookingGrid'
 import { BookingDrawer } from '@/components/BookingDrawer/BookingDrawer'
 import { ROOM_UNITS } from '@/lib/mockData'
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const fetcher = (url: string) => fetch(url).then(r => {
+  if (!r.ok) throw new Error(r.statusText)
+  return r.json()
+})
 
 const BookingsPage: NextPage = () => {
   const { data: bookings, isLoading } = useSWR<Booking[]>('/api/bookings', fetcher)
